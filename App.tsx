@@ -11,16 +11,16 @@ const App: React.FC = () => {
   const { t } = useTranslation();
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 font-sans text-gray-800 flex flex-col items-center justify-center p-4 overflow-hidden relative">
+    <div className="min-h-screen w-full bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 font-sans text-gray-800 flex flex-col items-center justify-start p-4 overflow-y-auto relative">
       <Header />
-      <header className="mb-8 text-center">
+      <header className="my-8 text-center">
         <h1 className="text-4xl font-bold text-gray-800 tracking-tight">{t('app.title')}</h1>
         <p className="text-lg text-gray-600 mt-2">{t('app.subtitle')}</p>
       </header>
       
       <ToggleSwitch mode={mode} setMode={setMode} />
 
-      <main className="w-full max-w-6xl flex-grow" style={{ perspective: '2000px' }}>
+      <main className="w-full max-w-6xl flex-grow mb-8" style={{ perspective: '2000px' }}>
         <div 
           className="relative w-full h-full transition-transform duration-700" 
           style={{ transformStyle: 'preserve-3d', transform: mode === Mode.DATA_TO_GRAPH ? 'rotateY(0deg)' : 'rotateY(180deg)' }}

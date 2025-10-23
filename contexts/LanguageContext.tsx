@@ -5,7 +5,7 @@ type Language = 'en' | 'cn';
 interface LanguageContextType {
   language: Language;
   setLanguage: (language: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, replacements?: { [key: string]: string }) => string;
 }
 
 const translations: { [key: string]: any } = { en: {}, cn: {} };
@@ -46,14 +46,23 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.setItem('language', language);
   }, [language]);
 
-  const t = useCallback((key: string): string => {
+  const t = useCallback((key: string, replacements?: { [key: string]: string }): string => {
     if (!translationsLoaded) return ''; // Return empty string or a loading indicator while fetching
     const keys = key.split('.');
     let result = translations[language];
     for (const k of keys) {
       result = result?.[k];
     }
-    return result || key;
+    
+    let template = result || key;
+
+    if (replacements) {
+        Object.keys(replacements).forEach(rKey => {
+            template = template.replace(`{${rKey}}`, replacements[rKey]);
+        });
+    }
+
+    return template;
   }, [language, translationsLoaded]);
 
   const value = useMemo(() => ({ language, setLanguage, t }), [language, t]);

@@ -1,21 +1,45 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import type { GraphSuggestion, ChartType } from '../types';
+
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import type { GraphSuggestion } from '../types';
 import { analyzeDataForGraphSuggestions } from '../services/aiService';
 import Loader from './Loader';
-import { BarChartIcon, LineChartIcon, PieChartIcon, RadarChartIcon, ScatterChartIcon } from './icons';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, ScatterChart, Scatter, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTranslation } from '../hooks/useTranslation';
 import { useModel } from '../hooks/useModel';
 
-const CHART_ICONS: Record<ChartType, React.ReactNode> = {
-  Bar: <BarChartIcon />,
-  Line: <LineChartIcon />,
-  Pie: <PieChartIcon />,
-  Radar: <RadarChartIcon />,
-  Scatter: <ScatterChartIcon />,
+declare const XLSX: any;
+declare const G2: any;
+
+const G2Chart: React.FC<{ spec: any; data: any[] }> = ({ spec, data }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const chartRef = useRef<any>(null);
+
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        const chart = new G2.Chart({
+            container: containerRef.current,
+            autoFit: true,
+            height: 400,
+        });
+
+        const finalSpec = { ...spec };
+        finalSpec.data = data;
+        
+        chart.options(finalSpec);
+        chart.render();
+        chartRef.current = chart;
+
+        return () => {
+            if (chartRef.current) {
+                chartRef.current.destroy();
+                chartRef.current = null;
+            }
+        };
+    }, [spec, data]);
+
+    return <div ref={containerRef} style={{ height: '400px' }} />;
 };
 
-const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe', '#00c49f'];
 
 const FileUpload: React.FC<{ onFileUpload: (file: File) => void; disabled: boolean }> = ({ onFileUpload, disabled }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -59,7 +83,7 @@ const FileUpload: React.FC<{ onFileUpload: (file: File) => void; disabled: boole
         <p className="mb-2 text-sm text-gray-500"><span className="font-semibold">{t('fileUpload.click')}</span> {t('fileUpload.orDrag')}</p>
         <p className="text-xs text-gray-500">{t('dataToGraph.fileTypes')}</p>
       </div>
-      <input type="file" className="hidden" onChange={handleChange} accept=".txt,.csv,.json" disabled={disabled} />
+      <input type="file" className="hidden" onChange={handleChange} accept=".txt,.csv,.json,.xls,.xlsx" disabled={disabled} />
     </label>
   );
 };
@@ -71,38 +95,74 @@ const DataToGraphPanel: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [suggestions, setSuggestions] = useState<GraphSuggestion[]>([]);
     const [selectedSuggestion, setSelectedSuggestion] = useState<GraphSuggestion | null>(null);
+    const [analysisReport, setAnalysisReport] = useState<string | null>(null);
+    const [processedData, setProcessedData] = useState<any[]>([]);
     const { t } = useTranslation();
     const { modelConfig } = useModel();
+    const hasData = file || url;
+
+    const resetState = () => {
+      setError(null);
+      setSuggestions([]);
+      setSelectedSuggestion(null);
+      setAnalysisReport(null);
+      setProcessedData([]);
+    }
+
+    const handleClear = () => {
+        setFile(null);
+        setUrl('');
+        resetState();
+    }
 
     const handleFileUpload = (uploadedFile: File) => {
         setFile(uploadedFile);
         setUrl('');
-        setError(null);
-        setSuggestions([]);
-        setSelectedSuggestion(null);
+        resetState();
     };
 
     const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setUrl(e.target.value);
         setFile(null);
-        setError(null);
-        setSuggestions([]);
-        setSelectedSuggestion(null);
+        resetState();
     }
 
     const handleDigest = useCallback(async () => {
         if (!file && !url) return;
 
         setIsLoading(true);
-        setError(null);
-        setSuggestions([]);
-        setSelectedSuggestion(null);
+        resetState();
 
         try {
             let content: string;
+            let dataForChart: any[] = [];
+            
             if (file) {
-                content = await file.text();
-            } else {
+                 if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
+                    const data = await file.arrayBuffer();
+                    const workbook = XLSX.read(data);
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    dataForChart = XLSX.utils.sheet_to_json(worksheet);
+                    content = XLSX.utils.sheet_to_csv(worksheet);
+                } else {
+                    content = await file.text();
+                    if (file.name.endsWith('.json')) {
+                        dataForChart = JSON.parse(content);
+                    } else if (file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
+                        const lines = content.split('\n').filter(l => l.trim() !== '');
+                        const header = lines[0].split(',').map(h => h.trim());
+                        dataForChart = lines.slice(1).map(line => {
+                            const values = line.split(',').map(v => v.trim());
+                            return header.reduce((obj, h, i) => {
+                                const val = values[i];
+                                obj[h] = !isNaN(parseFloat(val)) && isFinite(val as any) ? parseFloat(val) : val;
+                                return obj;
+                            }, {} as any);
+                        });
+                    }
+                }
+            } else { // URL
                  if (!url.startsWith('http')) {
                     throw new Error(t('errors.invalidUrl'));
                 }
@@ -110,6 +170,7 @@ const DataToGraphPanel: React.FC = () => {
                 if (!response.ok) {
                     throw new Error(t('errors.urlFetchFailed'));
                 }
+                // Simplified URL handling, assuming text-based content for now
                 content = await response.text();
             }
 
@@ -118,7 +179,10 @@ const DataToGraphPanel: React.FC = () => {
                 setIsLoading(false);
                 return;
             }
-            const newSuggestions = await analyzeDataForGraphSuggestions(content, modelConfig);
+
+            setProcessedData(dataForChart);
+            const { report, suggestions: newSuggestions } = await analyzeDataForGraphSuggestions(content, modelConfig);
+            setAnalysisReport(report);
             setSuggestions(newSuggestions);
             if(newSuggestions.length > 0) {
                 setSelectedSuggestion(newSuggestions[0]);
@@ -130,67 +194,18 @@ const DataToGraphPanel: React.FC = () => {
         }
     }, [file, url, t, modelConfig]);
 
-    const renderedChart = useMemo(() => {
-        if (!selectedSuggestion) return null;
-        
-        const { chartType, data } = selectedSuggestion;
-        const dataKey = Object.keys(data[0] || {}).find(k => k !== 'name' && k !== 'x' && k !== 'y') || 'value';
-        
-        return (
-            <ResponsiveContainer width="100%" height={400}>
-                {chartType === 'Bar' ? (
-                    <BarChart data={data}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey={dataKey} fill="#8884d8" />
-                    </BarChart>
-                ) : chartType === 'Line' ? (
-                    <LineChart data={data}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Line type="monotone" dataKey={dataKey} stroke="#82ca9d" />
-                    </LineChart>
-                ) : chartType === 'Pie' ? (
-                    <PieChart>
-                        <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={150} fill="#8884d8" label>
-                          {data.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip />
-                        <Legend />
-                    </PieChart>
-                ) : chartType === 'Scatter' ? (
-                    <ScatterChart>
-                        <CartesianGrid />
-                        <XAxis type="number" dataKey="x" name="x" />
-                        <YAxis type="number" dataKey="y" name="y" />
-                        <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                        <Scatter name="A dataset" data={data} fill="#8884d8" />
-                    </ScatterChart>
-                ) : chartType === 'Radar' ? (
-                    <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
-                        <PolarGrid />
-                        <PolarAngleAxis dataKey="name" />
-                        <PolarRadiusAxis />
-                        <Radar name="Metrics" dataKey={dataKey} stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
-                        <Tooltip />
-                        <Legend />
-                    </RadarChart>
-                ) : null}
-            </ResponsiveContainer>
-        );
-    }, [selectedSuggestion]);
 
     return (
-        <div className="p-8 bg-white/40 backdrop-blur-xl border border-white/50 rounded-3xl shadow-2xl shadow-indigo-200/50 h-full flex flex-col gap-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <div className="p-6 bg-white/40 backdrop-blur-xl border border-white/50 rounded-3xl shadow-2xl shadow-indigo-200/50 flex flex-col gap-6">
+            <div className="w-full text-center pb-4 border-b border-gray-300/50">
+                <div className="grid grid-cols-2">
+                    <div className={`font-semibold ${hasData ? 'text-gray-500' : 'text-indigo-600'}`}>{t('dataToGraph.step1')}</div>
+                    <div className={`font-semibold ${hasData ? 'text-indigo-600' : 'text-gray-500'}`}>{t('dataToGraph.step2')}</div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 <div>
-                    <h2 className="text-xl font-semibold text-gray-700 mb-2">{t('dataToGraph.step1')}</h2>
                      <FileUpload onFileUpload={handleFileUpload} disabled={isLoading} />
                      <div className="relative flex py-2 items-center">
                         <div className="flex-grow border-t border-gray-300"></div>
@@ -206,25 +221,34 @@ const DataToGraphPanel: React.FC = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-100"
                     />
                 </div>
-                <div className="flex flex-col h-full">
-                    <h2 className="text-xl font-semibold text-gray-700 mb-2">{t('dataToGraph.step2')}</h2>
-                    <div className="flex-grow flex items-center">
+                <div className="flex flex-col items-center justify-center h-full gap-2">
+                    <button
+                        onClick={handleDigest}
+                        disabled={!file && !url || isLoading}
+                        className="w-full h-36 bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-md flex items-center justify-center text-lg focus:outline-none focus:ring-4 focus:ring-indigo-300"
+                    >
+                        {isLoading ? <Loader /> : `✨ ${t('dataToGraph.generateButton')}`}
+                    </button>
+                    {(file || url) && !isLoading && (
                         <button
-                            onClick={handleDigest}
-                            disabled={!file && !url || isLoading}
-                            className="w-full h-24 bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-md flex items-center justify-center text-lg focus:outline-none focus:ring-4 focus:ring-indigo-300"
+                            onClick={handleClear}
+                            className="text-sm text-gray-500 hover:text-indigo-600 hover:underline"
                         >
-                            {isLoading ? <Loader /> : `✨ ${t('dataToGraph.generateButton')}`}
+                            Clear
                         </button>
-                    </div>
+                    )}
                 </div>
             </div>
 
             {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative" role="alert">{error}</div>}
 
             {suggestions.length > 0 && (
-                <div className="flex-grow flex flex-col min-h-0">
-                    <h2 className="text-xl font-semibold text-gray-700 mb-3">{t('dataToGraph.step3')}</h2>
+                <div className="flex flex-col">
+                    <h2 className="text-xl font-semibold text-gray-700 mb-4 text-center">{t('dataToGraph.step3')}</h2>
+                    <div className="prose prose-sm max-w-none bg-white/50 p-4 rounded-lg mb-4 overflow-y-auto max-h-48 border">
+                        <pre className="whitespace-pre-wrap font-sans text-sm">{analysisReport}</pre>
+                    </div>
+
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         {suggestions.map((s, i) => (
                             <button
@@ -232,19 +256,13 @@ const DataToGraphPanel: React.FC = () => {
                                 onClick={() => setSelectedSuggestion(s)}
                                 className={`p-4 rounded-xl transition-all duration-300 text-left ${selectedSuggestion?.title === s.title ? 'bg-indigo-500 text-white shadow-lg scale-105' : 'bg-white/60 hover:bg-white'}`}
                             >
-                                <div className="flex items-center gap-3">
-                                  <div className={`text-2xl ${selectedSuggestion?.title === s.title ? 'text-white' : 'text-gray-700'}`}>{CHART_ICONS[s.chartType]}</div>
-                                  <div>
-                                    <h3 className="font-semibold">{t('chartTypes.' + s.chartType.toLowerCase())}</h3>
-                                    <p className={`text-sm ${selectedSuggestion?.title === s.title ? 'text-indigo-100' : 'text-gray-600'}`}>{s.title}</p>
-                                  </div>
-                                </div>
+                                <h3 className="font-semibold text-center">{s.title}</h3>
                             </button>
                         ))}
                     </div>
                     {selectedSuggestion && (
-                         <div className="flex-grow bg-white/60 rounded-xl p-4 min-h-[400px]">
-                           {renderedChart}
+                         <div className="bg-white/60 rounded-xl p-4 min-h-[420px]">
+                           <G2Chart key={selectedSuggestion.title} spec={selectedSuggestion.spec} data={processedData} />
                          </div>
                     )}
                 </div>

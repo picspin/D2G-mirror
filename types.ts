@@ -4,22 +4,16 @@ export enum Mode {
   GRAPH_TO_DATA = 'GRAPH_TO_DATA',
 }
 
-export type ChartType = 'Bar' | 'Line' | 'Pie' | 'Scatter' | 'Radar';
-
 export interface GraphSuggestion {
-  chartType: ChartType;
   title: string;
-  reason: string;
-  data: any[]; 
+  spec: any;
 }
 
 export interface ExtractedDataResponse {
     isChart: boolean;
-    data?: any[];
+    report?: string;
     reason?: string;
 }
-
-export type OutputFormat = 'table' | 'json' | 'csv' | 'markdown';
 
 export type ModelProviderType = 'google' | 'custom';
 

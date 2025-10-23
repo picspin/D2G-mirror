@@ -1,6 +1,7 @@
+
 {
   "app": {
-    "title": "Gemini Data Visualizer",
+    "title": "Clarity Canvas",
     "subtitle": "The reversible data & visual intelligence tool"
   },
   "toggle": {
@@ -21,16 +22,18 @@
     "step2": "2. Generate Visualization",
     "step3": "3. Choose a Visualization",
     "generateButton": "Digest & Suggest Graphs",
-    "fileTypes": "TXT, CSV, or JSON"
+    "fileTypes": "XLSX, XLS, TXT, CSV, or JSON"
   },
   "graphToData": {
     "step1": "1. Provide Graph Image",
-    "step2": "2. Extract Data",
-    "step3": "3. Extracted Data",
-    "extractButton": "Digest & Extract Data",
+    "step2": "2. Generate Analysis",
+    "step3": "3. Generated Report",
+    "extractButton": "Analyze & Generate Report",
     "fileTypes": "JPG, PNG, or GIF",
     "preview": "Image Preview",
-    "previewAlt": "Graph preview"
+    "previewAlt": "Graph preview",
+    "downloadConfirm": "Do you want to download the analysis report?",
+    "downloadReport": "Download Report"
   },
   "chartTypes": {
     "bar": "Bar Chart",
@@ -40,7 +43,7 @@
     "scatter": "Scatter Chart"
   },
   "dataTable": {
-    "noData": "No data to display."
+    "noData": "No report generated."
   },
   "errors": {
     "fileEmpty": "File or URL content is empty or could not be read.",
@@ -50,6 +53,9 @@
     "urlFetchFailed": "Failed to fetch from URL. Check the link and its CORS policy.",
     "invalidUrl": "Please enter a valid URL."
   },
+  "loader": {
+    "digesting": "AI is digesting..."
+  },
   "modelManager": {
     "title": "Model Manager",
     "googleDesc": "The default provider uses Google Gemini. The API key must be configured as an environment variable (API_KEY) in the deployment environment.",
@@ -57,7 +63,10 @@
     "apiUrl": "API Base URL",
     "apiKey": "API Key",
     "modelName": "Model Name",
+    "fetchModels": "Fetch Models",
+    "noModels": "No models found. Check URL/Key.",
     "testButton": "Test Connection",
+    "testing": "Testing...",
     "testSuccess": "Connection successful!",
     "testFailed": "Connection failed.",
     "cancel": "Cancel",

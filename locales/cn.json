@@ -1,6 +1,7 @@
+
 {
   "app": {
-    "title": "Gemini 数据可视化工具",
+    "title": "明镜画布",
     "subtitle": "可逆的数据与视觉智能工具"
   },
   "toggle": {
@@ -21,16 +22,18 @@
     "step2": "2. 生成可视化",
     "step3": "3. 选择一个可视化图表",
     "generateButton": "分析并建议图表",
-    "fileTypes": "TXT, CSV, 或 JSON"
+    "fileTypes": "XLSX, XLS, TXT, CSV, 或 JSON"
   },
   "graphToData": {
     "step1": "1. 提供图表图片",
-    "step2": "2. 提取数据",
-    "step3": "3. 已提取的数据",
-    "extractButton": "分析并提取数据",
+    "step2": "2. 生成分析报告",
+    "step3": "3. 已生成的报告",
+    "extractButton": "分析并生成报告",
     "fileTypes": "JPG, PNG, 或 GIF",
     "preview": "图片预览",
-    "previewAlt": "图表预览"
+    "previewAlt": "图表预览",
+    "downloadConfirm": "您想下载这份分析报告吗？",
+    "downloadReport": "下载报告"
   },
   "chartTypes": {
     "bar": "柱状图",
@@ -40,7 +43,7 @@
     "scatter": "散点图"
   },
   "dataTable": {
-    "noData": "无数据显示。"
+    "noData": "尚未生成报告。"
   },
   "errors": {
     "fileEmpty": "文件或网址内容为空或无法读取。",
@@ -50,6 +53,9 @@
     "urlFetchFailed": "无法从网址获取内容。请检查链接和其CORS策略。",
     "invalidUrl": "请输入一个有效的网址。"
   },
+  "loader": {
+    "digesting": "AI 正在分析中..."
+  },
   "modelManager": {
     "title": "模型管理器",
     "googleDesc": "默认提供商使用 Google Gemini。API 密钥必须在部署环境中配置为环境变量 (API_KEY)。",
@@ -57,7 +63,10 @@
     "apiUrl": "API Base URL",
     "apiKey": "API 密钥",
     "modelName": "模型名称",
+    "fetchModels": "获取模型列表",
+    "noModels": "未找到模型, 请检查URL/密钥。",
     "testButton": "测试连接",
+    "testing": "测试中...",
     "testSuccess": "连接成功！",
     "testFailed": "连接失败。",
     "cancel": "取消",

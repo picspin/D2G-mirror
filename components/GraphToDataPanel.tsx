@@ -1,5 +1,6 @@
+
 import React, { useState, useCallback } from 'react';
-import type { ExtractedDataResponse, OutputFormat } from '../types';
+import type { ExtractedDataResponse } from '../types';
 import { analyzeGraphImage } from '../services/aiService';
 import Loader from './Loader';
 import { useTranslation } from '../hooks/useTranslation';
@@ -12,26 +13,6 @@ const blobToBase64 = (blob: Blob): Promise<string> =>
     reader.onload = () => resolve((reader.result as string).split(',')[1]);
     reader.onerror = (error) => reject(error);
   });
-
-const jsonToCsv = (json: any[]): string => {
-  if (!json || json.length === 0) return '';
-  const headers = Object.keys(json[0]);
-  const csvRows = [
-    headers.join(','),
-    ...json.map(row => headers.map(header => JSON.stringify(row[header])).join(','))
-  ];
-  return csvRows.join('\n');
-};
-
-const jsonToMarkdown = (json: any[]): string => {
-  if (!json || json.length === 0) return '';
-  const headers = Object.keys(json[0]);
-  const headerRow = `| ${headers.join(' | ')} |`;
-  const separatorRow = `| ${headers.map(() => '---').join(' | ')} |`;
-  const bodyRows = json.map(row => `| ${headers.map(h => row[h]).join(' | ')} |`).join('\n');
-  return `${headerRow}\n${separatorRow}\n${bodyRows}`;
-};
-
 
 const FileUpload: React.FC<{ onFileUpload: (file: File) => void; disabled: boolean }> = ({ onFileUpload, disabled }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -80,40 +61,16 @@ const FileUpload: React.FC<{ onFileUpload: (file: File) => void; disabled: boole
   );
 };
 
-const DataTable: React.FC<{ data: any[] }> = ({ data }) => {
-    const { t } = useTranslation();
-    if (!data || data.length === 0) return <p>{t('dataTable.noData')}</p>;
-    const headers = Object.keys(data[0]);
-    return (
-        <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left text-gray-500">
-                <thead className="text-xs text-gray-700 uppercase bg-gray-50/50">
-                    <tr>
-                        {headers.map(header => <th key={header} scope="col" className="px-6 py-3">{header}</th>)}
-                    </tr>
-                </thead>
-                <tbody>
-                    {data.map((row, i) => (
-                        <tr key={i} className="bg-white/50 border-b">
-                            {headers.map(header => <td key={`${i}-${header}`} className="px-6 py-4">{String(row[header])}</td>)}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
-};
-
 const GraphToDataPanel: React.FC = () => {
     const [file, setFile] = useState<File | null>(null);
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [extractedData, setExtractedData] = useState<ExtractedDataResponse | null>(null);
-    const [outputFormat, setOutputFormat] = useState<OutputFormat>('table');
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const { t } = useTranslation();
     const { modelConfig } = useModel();
+    const hasData = file || url;
 
     const cleanup = () => {
         setError(null);
@@ -122,6 +79,12 @@ const GraphToDataPanel: React.FC = () => {
             URL.revokeObjectURL(imagePreview);
         }
         setImagePreview(null);
+    }
+    
+    const handleClear = () => {
+        cleanup();
+        setFile(null);
+        setUrl('');
     }
 
     const handleFileUpload = (uploadedFile: File) => {
@@ -181,11 +144,34 @@ const GraphToDataPanel: React.FC = () => {
         }
     }, [file, url, t, modelConfig]);
 
+    const handleDownloadReport = () => {
+        if (!extractedData?.report) return;
+
+        if (window.confirm(t('graphToData.downloadConfirm'))) {
+            const blob = new Blob([extractedData.report], { type: 'text/markdown;charset=utf-8' });
+            const downloadUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = 'analysis-report.md';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(downloadUrl);
+        }
+    };
+
+
     return (
-        <div className="p-8 bg-white/40 backdrop-blur-xl border border-white/50 rounded-3xl shadow-2xl shadow-purple-200/50 h-full flex flex-col gap-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <div className="p-6 bg-white/40 backdrop-blur-xl border border-white/50 rounded-3xl shadow-2xl shadow-purple-200/50 flex flex-col gap-6">
+            <div className="w-full text-center pb-4 border-b border-gray-300/50">
+                <div className="grid grid-cols-2">
+                    <div className={`font-semibold ${hasData ? 'text-gray-500' : 'text-purple-600'}`}>{t('graphToData.step1')}</div>
+                    <div className={`font-semibold ${hasData ? 'text-purple-600' : 'text-gray-500'}`}>{t('graphToData.step2')}</div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-700 mb-2">{t('graphToData.step1')}</h2>
                   <FileUpload onFileUpload={handleFileUpload} disabled={isLoading} />
                   <div className="relative flex py-2 items-center">
                         <div className="flex-grow border-t border-gray-300"></div>
@@ -201,48 +187,47 @@ const GraphToDataPanel: React.FC = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:bg-gray-100"
                     />
                 </div>
-                 <div className="flex flex-col h-full">
-                    <h2 className="text-xl font-semibold text-gray-700 mb-2">{t('graphToData.step2')}</h2>
-                    <div className="flex-grow flex items-center">
+                 <div className="flex flex-col items-center justify-center h-full gap-2">
+                    <button
+                        onClick={handleDigest}
+                        disabled={!file && !url || isLoading}
+                        className="w-full h-36 bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-md flex items-center justify-center text-lg focus:outline-none focus:ring-4 focus:ring-purple-300"
+                    >
+                        {isLoading ? <Loader /> : `🔎 ${t('graphToData.extractButton')}`}
+                    </button>
+                    {(file || url) && !isLoading && (
                         <button
-                            onClick={handleDigest}
-                            disabled={!file && !url || isLoading}
-                            className="w-full h-24 bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-md flex items-center justify-center text-lg focus:outline-none focus:ring-4 focus:ring-purple-300"
+                            onClick={handleClear}
+                            className="text-sm text-gray-500 hover:text-purple-600 hover:underline"
                         >
-                            {isLoading ? <Loader /> : `🔎 ${t('graphToData.extractButton')}`}
+                            Clear
                         </button>
-                    </div>
+                    )}
                 </div>
             </div>
 
             {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative" role="alert">{error}</div>}
 
             {(imagePreview && !extractedData && !error) && (
-                 <div className="flex-grow flex flex-col items-center justify-center bg-gray-50/50 rounded-xl p-4">
+                 <div className="flex flex-col items-center justify-center bg-gray-50/50 rounded-xl p-4">
                     <h3 className="text-lg font-semibold text-gray-600 mb-4">{t('graphToData.preview')}</h3>
-                    <img src={imagePreview} alt={t('graphToData.previewAlt')} className="max-h-64 rounded-lg shadow-md" />
+                    <img src={imagePreview} alt={t('graphTo-data.previewAlt')} className="max-h-64 rounded-lg shadow-md" />
                 </div>
             )}
             
-            {extractedData?.data && (
-                <div className="flex-grow flex flex-col min-h-0 bg-white/60 p-4 rounded-xl">
-                    <h2 className="text-xl font-semibold text-gray-700 mb-3">{t('graphToData.step3')}</h2>
-                    <div className="flex items-center gap-2 mb-3">
-                        {(['table', 'json', 'csv', 'markdown'] as OutputFormat[]).map(format => (
-                            <button
-                                key={format}
-                                onClick={() => setOutputFormat(format)}
-                                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${outputFormat === format ? 'bg-purple-500 text-white' : 'bg-white hover:bg-purple-100'}`}
-                            >
-                                {format.toUpperCase()}
-                            </button>
-                        ))}
+            {extractedData?.report && (
+                <div className="flex flex-col">
+                    <h2 className="text-xl font-semibold text-gray-700 mb-4 text-center">{t('graphToData.step3')}</h2>
+                    <div className="rounded-xl bg-white/60 p-6 border border-gray-200">
+                        <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800">{extractedData.report}</pre>
                     </div>
-                    <div className="flex-grow overflow-auto rounded-lg border border-gray-200">
-                        {outputFormat === 'table' && <DataTable data={extractedData.data} />}
-                        {outputFormat === 'json' && <pre className="p-4 bg-gray-800 text-white rounded-lg text-sm"><code>{JSON.stringify(extractedData.data, null, 2)}</code></pre>}
-                        {outputFormat === 'csv' && <pre className="p-4 bg-white rounded-lg text-sm"><code>{jsonToCsv(extractedData.data)}</code></pre>}
-                        {outputFormat === 'markdown' && <pre className="p-4 bg-white rounded-lg text-sm"><code>{jsonToMarkdown(extractedData.data)}</code></pre>}
+                    <div className="mt-4 flex justify-center">
+                        <button
+                            onClick={handleDownloadReport}
+                            className="bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                        >
+                            {t('graphToData.downloadReport')}
+                        </button>
                     </div>
                 </div>
             )}
