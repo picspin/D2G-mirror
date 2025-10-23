@@ -1,0 +1,53 @@
+{
+  "app": {
+    "title": "Gemini 数据可视化工具",
+    "subtitle": "可逆的数据与视觉智能工具"
+  },
+  "toggle": {
+    "dataToGraph": "数据到图表",
+    "graphToData": "图表到数据"
+  },
+  "fileUpload": {
+    "click": "点击上传",
+    "orDrag": "或拖放文件"
+  },
+  "urlInput": {
+    "placeholderData": "或粘贴数据文件网址",
+    "placeholderImage": "或粘贴图片文件网址",
+    "fetchButton": "获取并处理"
+  },
+  "dataToGraph": {
+    "step1": "1. 提供您的数据",
+    "step2": "2. 生成可视化",
+    "step3": "3. 选择一个可视化图表",
+    "generateButton": "分析并建议图表",
+    "fileTypes": "TXT, CSV, 或 JSON"
+  },
+  "graphToData": {
+    "step1": "1. 提供图表图片",
+    "step2": "2. 提取数据",
+    "step3": "3. 已提取的数据",
+    "extractButton": "分析并提取数据",
+    "fileTypes": "JPG, PNG, 或 GIF",
+    "preview": "图片预览",
+    "previewAlt": "图表预览"
+  },
+  "chartTypes": {
+    "bar": "柱状图",
+    "line": "折线图",
+    "pie": "饼图",
+    "radar": "雷达图",
+    "scatter": "散点图"
+  },
+  "dataTable": {
+    "noData": "无数据显示。"
+  },
+  "errors": {
+    "fileEmpty": "文件或网址内容为空或无法读取。",
+    "fileReadFailed": "读取文件失败。",
+    "unknown": "发生未知错误。",
+    "notAGraph": "上传的图片不是有效的数据图表。",
+    "urlFetchFailed": "无法从网址获取内容。请检查链接和其CORS策略。",
+    "invalidUrl": "请输入一个有效的网址。"
+  }
+}
