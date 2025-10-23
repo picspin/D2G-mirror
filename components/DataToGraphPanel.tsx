@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import type { GraphSuggestion, ChartType } from '../types';
-import { analyzeDataForGraphSuggestions } from '../services/geminiService';
+import { analyzeDataForGraphSuggestions } from '../services/aiService';
 import Loader from './Loader';
 import { BarChartIcon, LineChartIcon, PieChartIcon, RadarChartIcon, ScatterChartIcon } from './icons';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, ScatterChart, Scatter, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTranslation } from '../hooks/useTranslation';
+import { useModel } from '../hooks/useModel';
 
 const CHART_ICONS: Record<ChartType, React.ReactNode> = {
   Bar: <BarChartIcon />,
@@ -71,6 +72,7 @@ const DataToGraphPanel: React.FC = () => {
     const [suggestions, setSuggestions] = useState<GraphSuggestion[]>([]);
     const [selectedSuggestion, setSelectedSuggestion] = useState<GraphSuggestion | null>(null);
     const { t } = useTranslation();
+    const { modelConfig } = useModel();
 
     const handleFileUpload = (uploadedFile: File) => {
         setFile(uploadedFile);
@@ -116,7 +118,7 @@ const DataToGraphPanel: React.FC = () => {
                 setIsLoading(false);
                 return;
             }
-            const newSuggestions = await analyzeDataForGraphSuggestions(content);
+            const newSuggestions = await analyzeDataForGraphSuggestions(content, modelConfig);
             setSuggestions(newSuggestions);
             if(newSuggestions.length > 0) {
                 setSelectedSuggestion(newSuggestions[0]);
@@ -126,7 +128,7 @@ const DataToGraphPanel: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [file, url, t]);
+    }, [file, url, t, modelConfig]);
 
     const renderedChart = useMemo(() => {
         if (!selectedSuggestion) return null;

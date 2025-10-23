@@ -49,5 +49,18 @@
     "notAGraph": "上传的图片不是有效的数据图表。",
     "urlFetchFailed": "无法从网址获取内容。请检查链接和其CORS策略。",
     "invalidUrl": "请输入一个有效的网址。"
+  },
+  "modelManager": {
+    "title": "模型管理器",
+    "googleDesc": "默认提供商使用 Google Gemini。API 密钥必须在部署环境中配置为环境变量 (API_KEY)。",
+    "customTab": "自定义 (类OpenAI)",
+    "apiUrl": "API Base URL",
+    "apiKey": "API 密钥",
+    "modelName": "模型名称",
+    "testButton": "测试连接",
+    "testSuccess": "连接成功！",
+    "testFailed": "连接失败。",
+    "cancel": "取消",
+    "save": "保存"
   }
 }

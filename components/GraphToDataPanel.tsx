@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import type { ExtractedDataResponse, OutputFormat } from '../types';
-import { analyzeGraphImage } from '../services/geminiService';
+import { analyzeGraphImage } from '../services/aiService';
 import Loader from './Loader';
 import { useTranslation } from '../hooks/useTranslation';
+import { useModel } from '../hooks/useModel';
 
 const blobToBase64 = (blob: Blob): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -112,6 +113,7 @@ const GraphToDataPanel: React.FC = () => {
     const [outputFormat, setOutputFormat] = useState<OutputFormat>('table');
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const { t } = useTranslation();
+    const { modelConfig } = useModel();
 
     const cleanup = () => {
         setError(null);
@@ -165,7 +167,7 @@ const GraphToDataPanel: React.FC = () => {
                 mimeType = blob.type;
             }
             
-            const result = await analyzeGraphImage(base64Image, mimeType);
+            const result = await analyzeGraphImage(base64Image, mimeType, modelConfig);
             
             if (result.isChart) {
                 setExtractedData(result);
@@ -177,7 +179,7 @@ const GraphToDataPanel: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [file, url, t]);
+    }, [file, url, t, modelConfig]);
 
     return (
         <div className="p-8 bg-white/40 backdrop-blur-xl border border-white/50 rounded-3xl shadow-2xl shadow-purple-200/50 h-full flex flex-col gap-6">

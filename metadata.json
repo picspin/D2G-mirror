@@ -1,5 +1,5 @@
 {
-  "name": "Gemini Data2Graph",
+  "name": "Gemini Data Visualizer",
   "description": "A reversible data-to-visual web tool powered by the Gemini API. It transforms data files into insightful graphs and, conversely, extracts data from graph images into structured formats.",
   "requestFramePermissions": []
 }

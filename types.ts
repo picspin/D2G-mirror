@@ -20,3 +20,16 @@ export interface ExtractedDataResponse {
 }
 
 export type OutputFormat = 'table' | 'json' | 'csv' | 'markdown';
+
+export type ModelProviderType = 'google' | 'custom';
+
+export interface CustomModelConfig {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface ModelConfig {
+  provider: ModelProviderType;
+  custom?: CustomModelConfig;
+}

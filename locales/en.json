@@ -49,5 +49,18 @@
     "notAGraph": "The uploaded image is not a valid data graph.",
     "urlFetchFailed": "Failed to fetch from URL. Check the link and its CORS policy.",
     "invalidUrl": "Please enter a valid URL."
+  },
+  "modelManager": {
+    "title": "Model Manager",
+    "googleDesc": "The default provider uses Google Gemini. The API key must be configured as an environment variable (API_KEY) in the deployment environment.",
+    "customTab": "Custom (OpenAI-like)",
+    "apiUrl": "API Base URL",
+    "apiKey": "API Key",
+    "modelName": "Model Name",
+    "testButton": "Test Connection",
+    "testSuccess": "Connection successful!",
+    "testFailed": "Connection failed.",
+    "cancel": "Cancel",
+    "save": "Save"
   }
 }
