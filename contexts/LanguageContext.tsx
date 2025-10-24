@@ -28,10 +28,10 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
 
   useEffect(() => {
-    // Fetch translation files instead of importing them to avoid module resolution issues.
+    // Fetch translation files from the public directory.
     Promise.all([
-        fetch('./locales/en.json').then(res => res.json()),
-        fetch('./locales/cn.json').then(res => res.json())
+        fetch('/locales/en.json').then(res => res.json()),
+        fetch('/locales/cn.json').then(res => res.json())
     ]).then(([en, cn]) => {
         translations.en = en;
         translations.cn = cn;

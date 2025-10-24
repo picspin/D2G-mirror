@@ -1,0 +1,74 @@
+{
+  "app": {
+    "title": "Clarity Canvas",
+    "subtitle": "The reversible data & visual intelligence tool"
+  },
+  "toggle": {
+    "dataToGraph": "Data to Graph",
+    "graphToData": "Graph to Data"
+  },
+  "fileUpload": {
+    "click": "Click to upload",
+    "orDrag": "or drag and drop"
+  },
+  "urlInput": {
+    "placeholderData": "Or paste a URL to a data file",
+    "placeholderImage": "Or paste a URL to an image file",
+    "fetchButton": "Fetch & Process"
+  },
+  "dataToGraph": {
+    "step1": "1. Provide Your Data",
+    "step2": "2. Generate Visualization",
+    "step3": "3. Choose a Visualization",
+    "generateButton": "Digest & Suggest Graphs",
+    "fileTypes": "XLSX, XLS, TXT, CSV, or JSON"
+  },
+  "graphToData": {
+    "step1": "1. Provide Graph Image",
+    "step2": "2. Generate Analysis",
+    "step3": "3. Generated Report",
+    "extractButton": "Analyze & Generate Report",
+    "fileTypes": "JPG, PNG, or GIF",
+    "preview": "Image Preview",
+    "previewAlt": "Graph preview",
+    "downloadConfirm": "Do you want to download the analysis report?",
+    "downloadReport": "Download Report"
+  },
+  "chartTypes": {
+    "bar": "Bar Chart",
+    "line": "Line Chart",
+    "pie": "Pie Chart",
+    "radar": "Radar Chart",
+    "scatter": "Scatter Chart"
+  },
+  "dataTable": {
+    "noData": "No report generated."
+  },
+  "errors": {
+    "fileEmpty": "File or URL content is empty or could not be read.",
+    "fileReadFailed": "Failed to read the file.",
+    "unknown": "An unknown error occurred.",
+    "notAGraph": "The uploaded image is not a valid data graph.",
+    "urlFetchFailed": "Failed to fetch from URL. Check the link and its CORS policy.",
+    "invalidUrl": "Please enter a valid URL."
+  },
+  "loader": {
+    "digesting": "AI is digesting..."
+  },
+  "modelManager": {
+    "title": "Model Manager",
+    "googleDesc": "The default provider uses Google Gemini. The API key must be configured as an environment variable (API_KEY) in the deployment environment.",
+    "customTab": "Custom (OpenAI-like)",
+    "apiUrl": "API Base URL",
+    "apiKey": "API Key",
+    "modelName": "Model Name",
+    "fetchModels": "Fetch Models",
+    "noModels": "No models found. Check URL/Key.",
+    "testButton": "Test Connection",
+    "testing": "Testing...",
+    "testSuccess": "Connection successful!",
+    "testFailed": "Connection failed.",
+    "cancel": "Cancel",
+    "save": "Save"
+  }
+}
