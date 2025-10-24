@@ -58,7 +58,10 @@
   },
   "modelManager": {
     "title": "Model Manager",
-    "googleDesc": "The default provider uses Google Gemini. The API key must be configured as an environment variable (API_KEY) in the deployment environment.",
+    "configureDataToGraph": "Configure: Data to Graph",
+    "configureGraphToData": "Configure: Graph to Data",
+    "googleDescData": "Uses Google's Gemini 2.5 Pro model. Recommended for its powerful reasoning and ability to generate complex chart specifications. Requires API_KEY environment variable.",
+    "googleDescGraph": "Uses Google's Gemini 2.5 Pro model. Recommended for its state-of-the-art vision capabilities to analyze and extract data from images. Requires API_KEY environment variable.",
     "customTab": "Custom (OpenAI-like)",
     "apiUrl": "API Base URL",
     "apiKey": "API Key",

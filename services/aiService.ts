@@ -1,281 +1,411 @@
+// Fix: Implementing the full content of aiService.ts which was missing.
+import { GoogleGenAI, Type } from '@google/genai';
+import type { ProviderConfig, GraphSuggestion, ExtractedDataResponse, CustomModelConfig } from '../types';
 
-import { GoogleGenAI } from "@google/genai";
-import type { GraphSuggestion, ExtractedDataResponse, ModelConfig, CustomModelConfig } from '../types';
+// Helper function to robustly extract a JSON string from a model's text response
+const extractJsonString = (text: string): string | null => {
+    if (!text) return null;
 
-const dataToGraphSystemPrompt = `
-# Role: Principal Data Visualization Scientist
-
-## Background:
-You want publication-grade figures fast, across diverse datasets. We translate tables into clear, rigorous visuals by decoding structure, aligning goals, and layering task-driven interactivity. You need a system, not a gamble.
-
-## Attention:
-We turn ambiguity into structure, and structure into beauty. Precision first, then flair, always reproducible. Expect three defensible options ready for reviewer scrutiny.
-
-## Profile:
-- Description: Senior data scientist for data visualization, producing high-impact, interactive figures with principled encoding, statistical integrity, and multi-modal design.
-
-### Skills:
-- Diagnose data structures rapidly: types, dimensionality, grouping, tidy vs wide.
-- Match encodings to semantics: position, length, color, shape, area, texture, motion, facets.
-- Design multi-panel and advanced charts (e.g., heatmaps, volcano, Manhattan, Kaplan–Meier, forest, raincloud, beeswarm, ROC/PR, circos).
-- Optimize for publication: colorblind-safe palettes, typography, sizing, annotation, captions.
-- Engineer interactivity: tooltips, brushing, linked highlights, drilldowns, faceting; exportable states via Altair/Plotly/Bokeh.
-
-## Goals:
-- Evaluate dataset structure before choosing charts.
-- Define the figure’s core question and success criteria.
-- Propose three options with explicit encodings and trade-offs.
-- Align interactivity to analysis tasks.
-- Provide reproducible specs and focused follow-up questions.
-
-## Constraints:
-- Never fabricate; request schema if missing.
-- Prefer perceptually accurate encodings; avoid misleading area/3D.
-- Ensure accessibility: colorblind-safe palettes, contrast, readable annotations.
-- Keep outputs exportable:  high-DPI PNG; consistent sizing.
-- Handle edge cases: missingness, outliers, large n/p, imbalanced groups, long/wide transforms.
-
-## Workflow:
-1. Parse metadata: names, types, units, roles (id, feature, target), groups.
-2. Tidy conversion; validate assumptions, missingness, duplicates, ranges.
-3. Define primary question and audience action: compare, rank, correlate, cluster, change, distribution.
-4. Select candidate encodings matched to semantics and perception.
-5. Draft three options with mapping tables and rationale.
-6. Specify preprocessing: normalization, binning, aggregation, statistical overlays, dimensionality reduction.
-7. Layer interactivity: overview+detail, drilldown, linked filtering, faceting.
-8. Lock publication specs: size, aspect, palette, typography, annotation style, export format.
-9. List assumptions, risks, and follow-ups to de-risk implementation.
-10. Provide acceptance criteria and next steps; iterate with minimal friction.
-
-## OutputFormat:
-- Begin with Three Perspectives:
-  1) Original Data Structure and Visual Channels: variable taxonomy, tidy state, candidate channels.
-  2) First-Principles Targets: core question, required comparisons, accuracy constraints.
-  3) Interactivity Plan: user tasks, controls, linking, export needs.
-- Then present Three Options (A, B, C). For each option include:
-  - Chart Type and When It Wins.
-  - Fit to data and goal.
-  - Encoding Spec: fields to position, color, size, shape, faceting, order, tooltips.
-  - Preprocessing: transforms, statistics, smoothing, dimensionality reduction.
-  - Design System: palette (e.g., Okabe–Ito, viridis), fonts, sizes, gridlines, annotations.
-  - Interactivity: behaviors and performance notes.
-  - Publication Standards: dimensions, DPI, formats, caption template.
-  - Assumptions and Trade-offs.
-  - Follow-up Questions.
-- Conclude with:
-  - Edge Cases and Fallbacks.
-  - Acceptance Criteria checklist.
-  - Deliverables: figure, code, style guide, caption.
-- Keep sentences concise; no code unless requested.
-
-## Final Output Structure
-After providing the full markdown report as described above, you MUST conclude your response with a single, final JSON object enclosed in a \`\`\`json code block. This JSON object should contain a single key "suggestions", which is an array of three objects. Each object in the array represents one of your suggested options (A, B, C) and must have two keys:
-1. "title": A concise title for the chart option (e.g., "Violin Plot of Feature Distribution").
-2. "spec": The complete and valid G2 chart specification for that option. The spec's data property should be an empty array like "data": []. The real data will be injected by the application.
-
-## Initialization:
-As Principal Data Visualization Scientist, follow Constraints and communicate with users.
-`;
-
-const graphToDataSystemPrompt = `
-You are an expert data analyst. Analyze the following image of a data visualization.
-If it is a standard data chart (like a bar, line, pie, or scatter plot), provide a comprehensive report in Markdown format. The report should summarize the chart's purpose, identify key trends, highlight important data points, and offer insights.
-Respond with a JSON object with two keys: "isChart": true" and "report", where "report" is the Markdown string.
-If the image is NOT a data chart, respond with the JSON object: {"isChart": false, "reason": "This image does not appear to be a data chart I can analyze."}.
-Respond ONLY with the JSON object. Do not include any markdown formatting or explanatory text outside of the JSON.
-`;
-
-const getGoogleAI = () => {
-    const API_KEY = process.env.API_KEY;
-    if (!API_KEY) {
-        throw new Error("API_KEY environment variable not set for Google Gemini.");
-    }
-    return new GoogleGenAI({ apiKey: API_KEY });
-};
-
-const parseJsonResponse = <T>(text: string, jsonStartMarker = '```json', jsonEndMarker = '```'): T => {
-    let potentialJson = text;
-
-    // First, try to find a JSON code block.
-    const startIndex = potentialJson.lastIndexOf(jsonStartMarker);
-    if (startIndex !== -1) {
-        const endIndex = potentialJson.lastIndexOf(jsonEndMarker);
-        if (endIndex > startIndex) {
-            potentialJson = potentialJson.substring(startIndex + jsonStartMarker.length, endIndex);
-        }
+    // Case 1: The text is wrapped in ```json ... ```
+    const markdownMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+    if (markdownMatch && markdownMatch[1]) {
+        return markdownMatch[1];
     }
 
-    // If no code block, or if something is still wrong, find the main JSON object.
-    const firstBrace = potentialJson.indexOf('{');
-    const lastBrace = potentialJson.lastIndexOf('}');
+    // Case 2: The JSON is embedded in other text. Find the first '{' or '[' and last '}' or ']'.
+    const firstBrace = text.indexOf('{');
+    const firstBracket = text.indexOf('[');
+    
+    let start = -1;
+    if (firstBrace === -1) start = firstBracket;
+    else if (firstBracket === -1) start = firstBrace;
+    else start = Math.min(firstBrace, firstBracket);
 
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-        potentialJson = potentialJson.substring(firstBrace, lastBrace + 1);
+    const lastBrace = text.lastIndexOf('}');
+    const lastBracket = text.lastIndexOf(']');
+
+    let end = Math.max(lastBrace, lastBracket);
+
+    if (start !== -1 && end > start) {
+        return text.substring(start, end + 1);
     }
     
-    // A common issue is trailing commas, which are invalid in JSON. This regex removes them.
-    potentialJson = potentialJson.replace(/,(?=\s*[}\]])/g, '');
-
-    try {
-        return JSON.parse(potentialJson) as T;
-    } catch (error) {
-        console.error("Original AI Response:", text);
-        console.error("Failed to parse JSON string:", potentialJson);
-        throw new SyntaxError("AI returned an invalid format. Could not parse JSON from response.");
+    // Case 3: The text might be the JSON itself.
+    const trimmedText = text.trim();
+    if (trimmedText.startsWith('{') || trimmedText.startsWith('[')) {
+        return trimmedText;
     }
+
+    return null; // No JSON found
 };
 
-interface SuggestionsResponse {
-    suggestions: GraphSuggestion[];
-}
 
-export const analyzeDataForGraphSuggestions = async (fileContent: string, modelConfig: ModelConfig): Promise<{ report: string; suggestions: GraphSuggestion[] }> => {
-  try {
-    let rawResponse: string;
+export const analyzeDataForGraphSuggestions = async (
+    data: string,
+    providerConfig: ProviderConfig
+): Promise<{ report: string; suggestions: GraphSuggestion[] }> => {
+    if (providerConfig.provider === 'custom' && providerConfig.custom) {
+        const { baseUrl, apiKey, model } = providerConfig.custom;
+        if (!baseUrl || !apiKey || !model) {
+            throw new Error('Custom model is not configured properly.');
+        }
+        const cleanedBaseUrl = baseUrl.replace(/\/$/, '');
+        
+        const prompt = `You are an expert data visualization assistant specializing in the G2 charting library. Your task is to analyze the provided dataset and suggest suitable graph visualizations.
+The dataset is as follows:
+---
+${data}
+---
+Based on this data, please provide:
+1. A brief analysis report of the data, highlighting key features, patterns, or potential insights.
+2. An array of 3 diverse and insightful graph suggestions. Each suggestion must include a 'title' (a descriptive name for the chart) and a 'spec' (a valid JSON object for the G2 charting library).
 
-    if (modelConfig.provider === 'google') {
-        const ai = getGoogleAI();
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `Data:\n\`\`\`\n${fileContent}\n\`\`\``,
+The 'spec' must adhere to the following rules:
+- It should NOT include the 'data' property. The data will be injected separately.
+- The 'encode' properties (like x, y, color) must correctly map to the fields/columns present in the dataset.
+- Choose appropriate and varied chart types (e.g., bar chart, line chart, scatter plot, pie chart) that best represent the data.
+
+Your entire output must be a single, valid JSON object with two keys: "report" (a string) and "suggestions" (an array of objects, each with "title" and "spec"). Do not include any other text or markdown formatting outside of the JSON object.`;
+
+        try {
+            const response = await fetch(`${cleanedBaseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                    'api-key': apiKey,
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [{ role: 'user', content: prompt }],
+                    temperature: 0.7,
+                    response_format: { type: 'json_object' },
+                })
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(`Custom model API error: ${response.status} ${response.statusText} - ${errorBody}`);
+            }
+
+            const result = await response.json();
+            const responseText = result.choices[0].message.content;
+            
+            const jsonString = extractJsonString(responseText);
+
+            if (!jsonString) {
+                console.error("Could not extract JSON from custom model response:", responseText);
+                throw new Error(`Custom model returned a non-JSON response. The response started with: "${responseText.substring(0, 50)}..."`);
+            }
+            
+            return JSON.parse(jsonString);
+
+        } catch (error) {
+            console.error('Error analyzing data with custom model:', error);
+             if (error instanceof Error && error.message.includes('non-JSON response')) {
+                throw error; // Re-throw our more specific error
+            }
+            if (error instanceof SyntaxError) { // JSON.parse error
+                console.error("Malformed JSON received from custom model:", (error as any).responseText);
+                throw new Error('Custom model returned malformed JSON. Check console for details.');
+            }
+            throw new Error('Failed to get graph suggestions from the custom AI model. Check console for details.');
+        }
+    }
+
+    // Fix: Using GoogleGenAI according to guidelines.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Fix: Using a powerful model for complex reasoning and JSON generation.
+    const model = 'gemini-2.5-pro';
+
+    const prompt = `You are an expert data visualization assistant specializing in the G2 charting library. Your task is to analyze the provided dataset and suggest suitable graph visualizations.
+The dataset is as follows:
+---
+${data}
+---
+Based on this data, please provide:
+1. A brief analysis report of the data, highlighting key features, patterns, or potential insights.
+2. An array of 3 diverse and insightful graph suggestions. Each suggestion must include a 'title' (a descriptive name for the chart) and a 'spec' (a valid JSON object for the G2 charting library).
+
+The 'spec' must adhere to the following rules:
+- It should NOT include the 'data' property. The data will be injected separately.
+- The 'encode' properties (like x, y, color) must correctly map to the fields/columns present in the dataset.
+- Choose appropriate and varied chart types (e.g., bar chart, line chart, scatter plot, pie chart) that best represent the data.
+
+Your entire output must be a single, valid JSON object that conforms to the specified schema.`;
+
+    const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+            report: { 
+                type: Type.STRING,
+                description: "A brief analysis of the provided data."
+            },
+            suggestions: {
+                type: Type.ARRAY,
+                description: "An array of 3 diverse G2 chart suggestions.",
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        title: { 
+                            type: Type.STRING,
+                            description: "A descriptive title for the chart."
+                        },
+                        spec: {
+                            type: Type.OBJECT,
+                            description: "A valid G2 chart specification object, without the data property. It should at least contain a 'type' property.",
+                             // We define a minimal set of properties to ensure a valid schema,
+                             // allowing the model flexibility for the complex parts like 'encode'.
+                            properties: {
+                                type: { type: Type.STRING, description: "The main type of the mark, e.g., 'interval', 'line'." }
+                            },
+                            required: ['type']
+                        },
+                    },
+                    required: ['title', 'spec'],
+                },
+            },
+        },
+        required: ['report', 'suggestions'],
+    };
+
+    try {
+        const result = await ai.models.generateContent({
+            model: model,
+            contents: prompt,
             config: {
-                systemInstruction: dataToGraphSystemPrompt,
+                responseMimeType: 'application/json',
+                responseSchema: responseSchema,
+                // Using a higher temperature for more diverse suggestions
+                temperature: 0.7,
             },
         });
-        rawResponse = response.text.trim();
-    } else {
-        if (!modelConfig.custom) throw new Error("Custom model configuration is missing.");
-        const { baseUrl, apiKey, model } = modelConfig.custom;
-        const res = await fetch(`${baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({
-                model,
-                messages: [
-                    { role: 'system', content: dataToGraphSystemPrompt },
-                    { role: 'user', content: `Data:\n\`\`\`\n${fileContent}\n\`\`\`` }
-                ],
-            })
-        });
-        if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(`Custom API request failed with status ${res.status}: ${errorText}`);
-        }
-        const data = await res.json();
-        rawResponse = data.choices[0].message.content;
-    }
 
-    const report = rawResponse.substring(0, rawResponse.lastIndexOf('```json'));
-    const suggestionsResponse = parseJsonResponse<SuggestionsResponse>(rawResponse);
-    return { report, suggestions: suggestionsResponse.suggestions || [] };
-  } catch (error)
- {
-    console.error("Error analyzing data for graph suggestions:", error);
-    if (error instanceof Error && (error.message.includes('JSON') || error instanceof SyntaxError)) {
-        throw new Error("AI returned an invalid format. Please try a different file or check the data format.");
+        const jsonString = result.text;
+        const parsedResponse = JSON.parse(jsonString);
+        return parsedResponse;
+
+    } catch (error) {
+        console.error('Error analyzing data for graph suggestions:', error);
+        throw new Error('Failed to get graph suggestions from the AI model. Please check the console for details.');
     }
-    throw error;
-  }
 };
 
-export const analyzeGraphImage = async (base64Image: string, mimeType: string, modelConfig: ModelConfig): Promise<ExtractedDataResponse> => {
-    try {
-        let rawResponse: string;
+export const analyzeGraphImage = async (
+    base64Image: string,
+    mimeType: string,
+    providerConfig: ProviderConfig
+): Promise<ExtractedDataResponse> => {
+    if (providerConfig.provider === 'custom' && providerConfig.custom) {
+        const { baseUrl, apiKey, model } = providerConfig.custom;
+        if (!baseUrl || !apiKey || !model) {
+            throw new Error('Custom model is not configured properly.');
+        }
+        const cleanedBaseUrl = baseUrl.replace(/\/$/, '');
 
-        if (modelConfig.provider === 'google') {
-            const ai = getGoogleAI();
-            const imagePart = { inlineData: { data: base64Image, mimeType } };
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [imagePart] },
-                config: {
-                    systemInstruction: graphToDataSystemPrompt,
+        const prompt = `Analyze the provided image.
+1. First, determine if the image is a data visualization, such as a chart or a graph.
+2. If it is NOT a chart or graph, your JSON response should have 'isChart' as false and a 'reason' key explaining why.
+3. If it IS a chart or graph, your JSON response should have 'isChart' as true and a 'report' key containing a detailed analysis. The analysis should:
+    a. Identify the chart type (e.g., bar chart, line graph, pie chart, scatter plot).
+    b. Extract the underlying data as accurately as possible. Present it in a clear, structured format like a Markdown table.
+    c. Summarize the key insights, trends, or the main point conveyed by the chart.
+    d. Combine all findings from steps a, b, and c into a comprehensive analysis report formatted in Markdown.
+
+Your entire response must be a single, valid JSON object. Do not include any other text or markdown formatting outside of the JSON object.`;
+
+        try {
+            const response = await fetch(`${cleanedBaseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                    'api-key': apiKey,
                 },
-            });
-            rawResponse = response.text.trim();
-        } else {
-             if (!modelConfig.custom) throw new Error("Custom model configuration is missing.");
-             const { baseUrl, apiKey, model } = modelConfig.custom;
-             const res = await fetch(`${baseUrl}/chat/completions`, {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                 body: JSON.stringify({
-                     model,
-                     messages: [
-                        { role: 'system', content: graphToDataSystemPrompt },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [
                         {
-                           role: 'user',
-                           content: [
-                               { type: 'text', text: 'Analyze the attached image following the system instructions.' },
-                               { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } }
-                           ]
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: prompt },
+                                {
+                                    type: 'image_url',
+                                    image_url: {
+                                        url: `data:${mimeType};base64,${base64Image}`
+                                    }
+                                }
+                            ]
                         }
-                     ],
-                 })
-             });
-             if (!res.ok) {
-                const errorText = await res.text();
-                throw new Error(`Custom API request failed with status ${res.status}: ${errorText}`);
-             }
-             const data = await res.json();
-             rawResponse = data.choices[0].message.content;
-        }
+                    ],
+                    response_format: { type: 'json_object' },
+                })
+            });
 
-        // The prompt asks for a raw JSON response, but models can be inconsistent.
-        // Use the robust parser.
-        const result = parseJsonResponse<ExtractedDataResponse>(rawResponse);
-        
-        if (typeof result.isChart === 'boolean') {
-             return result;
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(`Custom model API error: ${response.status} ${response.statusText} - ${errorBody}`);
+            }
+
+            const result = await response.json();
+            const responseText = result.choices[0].message.content;
+            
+            const jsonString = extractJsonString(responseText);
+
+            if (!jsonString) {
+                console.error("Could not extract JSON from custom model response:", responseText);
+                throw new Error(`Custom model returned a non-JSON response. The response started with: "${responseText.substring(0, 50)}..."`);
+            }
+
+            return JSON.parse(jsonString);
+
+        } catch (error) {
+            console.error('Error analyzing image with custom model:', error);
+            if (error instanceof Error && error.message.includes('non-JSON response')) {
+                throw error; // Re-throw our more specific error
+            }
+            if (error instanceof SyntaxError) { // JSON.parse error
+                console.error("Malformed JSON received from custom model:", (error as any).responseText);
+                throw new Error('Custom model returned malformed JSON. Check console for details.');
+            }
+            throw new Error('Failed to analyze the graph image with the custom AI model. Check console for details.');
         }
-        throw new Error("Invalid response format from AI.");
+    }
+
+    // Fix: Using GoogleGenAI according to guidelines.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Fix: Using a powerful model capable of multimodal input.
+    const model = 'gemini-2.5-pro';
+
+    const prompt = `Analyze the provided image.
+1. First, determine if the image is a data visualization, such as a chart or a graph.
+2. If it is NOT a chart or graph, provide a brief reason why.
+3. If it IS a chart or graph, perform a detailed analysis:
+    a. Identify the chart type (e.g., bar chart, line graph, pie chart, scatter plot).
+    b. Extract the underlying data as accurately as possible. Present it in a clear, structured format like a Markdown table.
+    c. Summarize the key insights, trends, or the main point conveyed by the chart.
+    d. Combine all findings from steps a, b, and c into a comprehensive analysis report formatted in Markdown.
+
+Your entire response must be a single, valid JSON object conforming to the specified schema.`;
+
+    const imagePart = {
+        inlineData: {
+            data: base64Image,
+            mimeType: mimeType,
+        },
+    };
+
+    const textPart = {
+        text: prompt
+    };
+
+    const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+            isChart: {
+                type: Type.BOOLEAN,
+                description: 'True if the image is a chart or graph, false otherwise.'
+            },
+            report: {
+                type: Type.STRING,
+                description: 'The full analysis report in Markdown format if the image is a chart. This field should be omitted if it is not a chart.'
+            },
+            reason: {
+                type: Type.STRING,
+                description: 'A brief explanation for why the image is not considered a chart. This field should be omitted if it is a chart.'
+            },
+        },
+        required: ['isChart'],
+    };
+
+    try {
+        const result = await ai.models.generateContent({
+            model: model,
+            contents: { parts: [imagePart, textPart] },
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: responseSchema,
+            },
+        });
+
+        const jsonString = result.text;
+        return JSON.parse(jsonString);
+
     } catch (error) {
-        console.error("Error analyzing graph image:", error);
-        if (error instanceof Error && (error.message.includes('JSON') || error instanceof SyntaxError)) {
-            throw new Error("AI returned an invalid format. Please try a different image.");
-        }
-        throw error;
+        console.error('Error analyzing graph image:', error);
+        throw new Error('Failed to analyze the graph image with the AI model. Please check the console for details.');
     }
 };
 
-export const testCustomModelConnection = async (config: CustomModelConfig): Promise<boolean> => {
-    try {
-        const { baseUrl, apiKey, model } = config;
-        const res = await fetch(`${baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({
-                model,
-                messages: [{ role: 'user', content: 'Say "hello"' }],
-                max_tokens: 5
-            })
-        });
-        return res.ok;
-    } catch (error) {
-        console.error("Custom model connection test failed:", error);
-        return false;
-    }
-};
 
-export const fetchCustomModels = async (config: Omit<CustomModelConfig, 'model'>): Promise<string[]> => {
+export const fetchCustomModels = async (config: CustomModelConfig): Promise<string[]> => {
+    if (!config.baseUrl || !config.apiKey) {
+        throw new Error("API Base URL and API Key are required.");
+    }
+    const cleanedBaseUrl = config.baseUrl.replace(/\/$/, '');
     try {
-        const { baseUrl, apiKey } = config;
-        const res = await fetch(`${baseUrl}/models`, {
-            headers: { 'Authorization': `Bearer ${apiKey}` }
+        const response = await fetch(`${cleanedBaseUrl}/models`, {
+            headers: {
+                'Authorization': `Bearer ${config.apiKey}`,
+                'api-key': config.apiKey,
+            }
         });
-        if (!res.ok) {
-            console.error(`Failed to fetch models: ${res.status}`);
-            return [];
+        if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                throw new Error(`Authentication failed (${response.status}). Please check your API Key.`);
+            }
+            throw new Error(`Failed to fetch models: Server responded with ${response.status} ${response.statusText}`);
         }
-        const data = await res.json();
-        if (!data.data || !Array.isArray(data.data)) {
-            console.error("Fetched model data is not in the expected format:", data);
-            return [];
+        const data = await response.json();
+        if (Array.isArray(data.data)) {
+            return data.data.map((model: any) => model.id).sort();
         }
-        return data.data.map((model: any) => model.id).sort();
+        if(Array.isArray(data)) { // Some providers return the array directly
+            return data.map((model: any) => model.id).sort();
+        }
+        return [];
     } catch (error) {
         console.error("Failed to fetch custom models:", error);
-        return [];
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("An unknown error occurred while fetching models.");
+    }
+};
+
+export const testCustomModelConnection = async (config: CustomModelConfig): Promise<void> => {
+     if (!config.baseUrl || !config.apiKey || !config.model) {
+        throw new Error("URL, API Key, and Model Name are required.");
+    }
+    const cleanedBaseUrl = config.baseUrl.replace(/\/$/, '');
+    try {
+        const response = await fetch(`${cleanedBaseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${config.apiKey}`,
+                'api-key': config.apiKey,
+            },
+            body: JSON.stringify({
+                model: config.model,
+                messages: [{ role: 'user', content: 'Say "hello"' }],
+                max_tokens: 5,
+                stream: false
+            })
+        });
+        if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                 throw new Error(`Authentication failed (${response.status}). Check API Key.`);
+            } else if (response.status === 404) {
+                 throw new Error(`Endpoint/Model not found (${response.status}). Check URL and Model Name.`);
+            }
+            throw new Error(`Connection failed: Server responded with ${response.status}`);
+        }
+    } catch (error) {
+        console.error("Custom model connection test failed:", error);
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("Connection test failed. Check console for details.");
     }
 };

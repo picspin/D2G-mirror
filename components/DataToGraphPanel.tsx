@@ -181,7 +181,7 @@ const DataToGraphPanel: React.FC = () => {
             }
 
             setProcessedData(dataForChart);
-            const { report, suggestions: newSuggestions } = await analyzeDataForGraphSuggestions(content, modelConfig);
+            const { report, suggestions: newSuggestions } = await analyzeDataForGraphSuggestions(content, modelConfig.dataToGraph);
             setAnalysisReport(report);
             setSuggestions(newSuggestions);
             if(newSuggestions.length > 0) {

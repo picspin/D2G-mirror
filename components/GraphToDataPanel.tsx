@@ -130,7 +130,7 @@ const GraphToDataPanel: React.FC = () => {
                 mimeType = blob.type;
             }
             
-            const result = await analyzeGraphImage(base64Image, mimeType, modelConfig);
+            const result = await analyzeGraphImage(base64Image, mimeType, modelConfig.graphToData);
             
             if (result.isChart) {
                 setExtractedData(result);
@@ -211,7 +211,7 @@ const GraphToDataPanel: React.FC = () => {
             {(imagePreview && !extractedData && !error) && (
                  <div className="flex flex-col items-center justify-center bg-gray-50/50 rounded-xl p-4">
                     <h3 className="text-lg font-semibold text-gray-600 mb-4">{t('graphToData.preview')}</h3>
-                    <img src={imagePreview} alt={t('graphTo-data.previewAlt')} className="max-h-64 rounded-lg shadow-md" />
+                    <img src={imagePreview} alt={t('graphToData.previewAlt')} className="max-h-64 rounded-lg shadow-md" />
                 </div>
             )}
             

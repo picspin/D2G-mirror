@@ -23,7 +23,12 @@ export interface CustomModelConfig {
   model: string;
 }
 
-export interface ModelConfig {
+export interface ProviderConfig {
   provider: ModelProviderType;
   custom?: CustomModelConfig;
+}
+
+export interface ModelConfig {
+    dataToGraph: ProviderConfig;
+    graphToData: ProviderConfig;
 }
