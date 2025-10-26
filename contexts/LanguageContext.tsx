@@ -8,8 +8,6 @@ interface LanguageContextType {
   t: (key: string, replacements?: { [key: string]: string }) => string;
 }
 
-const translations: { [key: string]: any } = { en: {}, cn: {} };
-
 export const LanguageContext = createContext<LanguageContextType>({
   language: 'en',
   setLanguage: () => {},
@@ -25,6 +23,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const browserLang = navigator.language.split(/[-_]/)[0];
     return browserLang === 'zh' ? 'cn' : 'en';
   });
+  const [translations, setTranslations] = useState<{ [key: string]: any }>({});
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
 
   useEffect(() => {
@@ -33,8 +32,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         fetch('/locales/en.json').then(res => res.json()),
         fetch('/locales/cn.json').then(res => res.json())
     ]).then(([en, cn]) => {
-        translations.en = en;
-        translations.cn = cn;
+        setTranslations({ en, cn });
         setTranslationsLoaded(true);
     }).catch(err => {
         console.error("Failed to load translations:", err);
@@ -48,13 +46,19 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const t = useCallback((key: string, replacements?: { [key: string]: string }): string => {
     if (!translationsLoaded) return ''; // Return empty string or a loading indicator while fetching
+    
     const keys = key.split('.');
     let result = translations[language];
     for (const k of keys) {
       result = result?.[k];
     }
     
-    let template = result || key;
+    let template: string;
+    if (result !== undefined && result !== null) {
+      template = String(result);
+    } else {
+      template = key;
+    }
 
     if (replacements) {
         Object.keys(replacements).forEach(rKey => {
@@ -63,7 +67,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     return template;
-  }, [language, translationsLoaded]);
+  }, [language, translations, translationsLoaded]);
 
   const value = useMemo(() => ({ language, setLanguage, t }), [language, t]);
 

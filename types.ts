@@ -1,13 +1,17 @@
 
+
 export enum Mode {
   DATA_TO_GRAPH = 'DATA_TO_GRAPH',
   GRAPH_TO_DATA = 'GRAPH_TO_DATA',
 }
 
-export interface GraphSuggestion {
+export interface ChartRecommendation {
+  chartType: string;
   title: string;
-  spec: any;
+  reason: string;
+  config: any;
 }
+
 
 export interface ExtractedDataResponse {
     isChart: boolean;

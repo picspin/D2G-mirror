@@ -1,33 +1,134 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import type { GraphSuggestion } from '../types';
+import type { ChartRecommendation } from '../types';
 import { analyzeDataForGraphSuggestions } from '../services/aiService';
 import Loader from './Loader';
 import { useTranslation } from '../hooks/useTranslation';
 import { useModel } from '../hooks/useModel';
 
 declare const XLSX: any;
-declare const G2: any;
+declare const Papa: any;
+declare const Charts: any;
 
-const G2Chart: React.FC<{ spec: any; data: any[] }> = ({ spec, data }) => {
+// Pre-defined templates for consistent styling and common options
+const CHART_TEMPLATES: { [key: string]: any } = {
+    line: { smooth: true, point: { size: 3 }, tooltip: { showMarkers: true } },
+    column: { },
+    bar: { },
+    pie: { appendPadding: 10, radius: 0.8, label: { type: 'inner', offset: '-50%', content: '{percentage}', style: { textAlign: 'center', fontSize: 14 } } },
+    area: { smooth: true },
+    scatter: { point: { size: 4, shape: 'circle' } },
+    rose: { radius: 0.9, label: { offset: -15 } },
+};
+
+// --- Chart Rendering Component with Fallback ---
+const AntdChart: React.FC<{ recommendation: ChartRecommendation | null; data: any[] }> = ({ recommendation, data }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<any>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [isLibReady, setIsLibReady] = useState(false);
 
+    // Effect to check for the charting library
     useEffect(() => {
-        if (!containerRef.current) return;
+        if (typeof Charts !== 'undefined' && Charts) {
+            setIsLibReady(true);
+            return;
+        }
 
-        const chart = new G2.Chart({
-            container: containerRef.current,
-            autoFit: true,
-            height: 400,
-        });
+        const intervalId = setInterval(() => {
+            if (typeof Charts !== 'undefined' && Charts) {
+                setIsLibReady(true);
+                clearInterval(intervalId);
+            }
+        }, 100);
 
-        const finalSpec = { ...spec };
-        finalSpec.data = data;
+        // Set a timeout to prevent infinite polling
+        const timeoutId = setTimeout(() => {
+            clearInterval(intervalId);
+            if (typeof Charts === 'undefined' || !Charts) {
+                setError("Ant Design Charts library could not be loaded. Please check your internet connection and refresh the page.");
+            }
+        }, 5000); // 5-second timeout
+
+        return () => {
+            clearInterval(intervalId);
+            clearTimeout(timeoutId);
+        };
+    }, []);
+
+    const getChartComponent = (type: string) => {
+        if (!isLibReady || typeof Charts === 'undefined' || !Charts) return null;
         
-        chart.options(finalSpec);
-        chart.render();
-        chartRef.current = chart;
+        const componentNameMapping: { [key: string]: string } = {
+            line: 'Line', column: 'Column', bar: 'Bar', pie: 'Pie', area: 'Area', scatter: 'Scatter',
+            dualaxes: 'DualAxes', liquid: 'Liquid', violin: 'Violin', bullet: 'Bullet', heatmap: 'Heatmap',
+            waterfall: 'Waterfall', radar: 'Radar', sankey: 'Sankey', sunburst: 'Sunburst', rose: 'Rose', gantt: 'Gantt'
+        };
+
+        const componentName = componentNameMapping[type];
+        return componentName ? Charts[componentName] : null;
+    };
+
+    // Effect to render the chart once the library and data are ready
+    useEffect(() => {
+        if (!containerRef.current || !isLibReady) return;
+        
+        // Cleanup previous instance
+        if (chartRef.current) {
+            chartRef.current.destroy();
+            chartRef.current = null;
+        }
+        setError(null);
+        containerRef.current.innerHTML = '';
+
+        if (!recommendation || !data || data.length === 0) {
+             return;
+        }
+
+        const { chartType, config: llmConfig } = recommendation;
+        const normalizedChartType = chartType?.toLowerCase().replace(/ /g, '') || '';
+        
+        const ChartComponent = getChartComponent(normalizedChartType);
+        if (!ChartComponent) {
+            setError(`Unsupported chart type: "${chartType}". The AI suggested a chart that is not available in the current library version.`);
+            return;
+        }
+
+        // Validation: Check for required data fields
+        const requiredFields: string[] = Array.from(new Set([
+            llmConfig.xField, llmConfig.yField, llmConfig.seriesField, llmConfig.colorField, 
+            llmConfig.angleField, llmConfig.sizeField, llmConfig.percent, llmConfig.taskField,
+            llmConfig.sourceField, llmConfig.targetField, llmConfig.valueField,
+            ...(Array.isArray(llmConfig.yField) ? llmConfig.yField : [])
+        ].filter(Boolean)));
+        
+        if (data.length > 0 && requiredFields.length > 0) {
+            const firstRow = data[0];
+            const missingFields = requiredFields.filter(field => !(field in firstRow));
+            if (missingFields.length > 0) {
+                setError(`Chart Error: The AI's configuration requires data fields not present in your file: <strong>${missingFields.join(', ')}</strong>.`);
+                return;
+            }
+        }
+        
+        const template = CHART_TEMPLATES[normalizedChartType] || {};
+        const finalConfig = {
+            ...template,
+            ...llmConfig,
+            data,
+            height: 400,
+            autoFit: true,
+            theme: 'default'
+        };
+
+        try {
+            const chart = new ChartComponent(containerRef.current, finalConfig);
+            chart.render();
+            chartRef.current = chart;
+        } catch (err) {
+            console.error("Ant Design Chart rendering failed:", err);
+            setError(`Chart rendering failed. The AI might have provided an invalid configuration for a '${chartType}' chart. Check console for details.`);
+        }
 
         return () => {
             if (chartRef.current) {
@@ -35,7 +136,23 @@ const G2Chart: React.FC<{ spec: any; data: any[] }> = ({ spec, data }) => {
                 chartRef.current = null;
             }
         };
-    }, [spec, data]);
+    }, [recommendation, data, isLibReady]);
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center h-full text-red-500 font-semibold p-4 text-center"
+                 dangerouslySetInnerHTML={{ __html: error }}
+            />
+        );
+    }
+    
+    if (!isLibReady) {
+        return (
+             <div className="flex items-center justify-center h-full text-gray-500 font-semibold p-4 text-center">
+                Loading charting library...
+            </div>
+        )
+    }
 
     return <div ref={containerRef} style={{ height: '400px' }} />;
 };
@@ -93,9 +210,9 @@ const DataToGraphPanel: React.FC = () => {
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [suggestions, setSuggestions] = useState<GraphSuggestion[]>([]);
-    const [selectedSuggestion, setSelectedSuggestion] = useState<GraphSuggestion | null>(null);
-    const [analysisReport, setAnalysisReport] = useState<string | null>(null);
+    const [chartRecommendations, setChartRecommendations] = useState<ChartRecommendation[]>([]);
+    const [selectedRecommendation, setSelectedRecommendation] = useState<ChartRecommendation | null>(null);
+    const [dataAnalysis, setDataAnalysis] = useState<string | null>(null);
     const [processedData, setProcessedData] = useState<any[]>([]);
     const { t } = useTranslation();
     const { modelConfig } = useModel();
@@ -103,9 +220,9 @@ const DataToGraphPanel: React.FC = () => {
 
     const resetState = () => {
       setError(null);
-      setSuggestions([]);
-      setSelectedSuggestion(null);
-      setAnalysisReport(null);
+      setChartRecommendations([]);
+      setSelectedRecommendation(null);
+      setDataAnalysis(null);
       setProcessedData([]);
     }
 
@@ -134,8 +251,8 @@ const DataToGraphPanel: React.FC = () => {
         resetState();
 
         try {
-            let content: string;
             let dataForChart: any[] = [];
+            let contentSample: string = '';
             
             if (file) {
                  if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
@@ -144,48 +261,64 @@ const DataToGraphPanel: React.FC = () => {
                     const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
                     dataForChart = XLSX.utils.sheet_to_json(worksheet);
-                    content = XLSX.utils.sheet_to_csv(worksheet);
-                } else {
-                    content = await file.text();
-                    if (file.name.endsWith('.json')) {
-                        dataForChart = JSON.parse(content);
-                    } else if (file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
-                        const lines = content.split('\n').filter(l => l.trim() !== '');
-                        const header = lines[0].split(',').map(h => h.trim());
-                        dataForChart = lines.slice(1).map(line => {
-                            const values = line.split(',').map(v => v.trim());
-                            return header.reduce((obj, h, i) => {
-                                const val = values[i];
-                                obj[h] = !isNaN(parseFloat(val)) && isFinite(val as any) ? parseFloat(val) : val;
-                                return obj;
-                            }, {} as any);
+                } else if (file.name.endsWith('.json')) {
+                    const content = await file.text();
+                    dataForChart = JSON.parse(content);
+                } else if (file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
+                    const content = await file.text();
+                    const result: any = await new Promise((resolve, reject) => {
+                        Papa.parse(content, {
+                            header: true,
+                            skipEmptyLines: true,
+                            dynamicTyping: true,
+                            complete: resolve,
+                            error: reject,
                         });
+                    });
+                    if (result.errors.length) {
+                        throw new Error(`CSV Parsing Error: ${result.errors[0].message}`);
                     }
+                    dataForChart = result.data;
                 }
             } else { // URL
                  if (!url.startsWith('http')) {
                     throw new Error(t('errors.invalidUrl'));
                 }
+                // For URL, we simplify and assume text-based content for now
                 const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(t('errors.urlFetchFailed'));
                 }
-                // Simplified URL handling, assuming text-based content for now
-                content = await response.text();
+                const content = await response.text();
+                // Rudimentary parsing based on URL extension
+                 if (url.endsWith('.json')) {
+                     dataForChart = JSON.parse(content);
+                 } else { // Assume CSV
+                    const result: any = Papa.parse(content, { header: true, skipEmptyLines: true, dynamicTyping: true });
+                     if (result.errors.length) {
+                         throw new Error(`CSV Parsing Error: ${result.errors[0].message}`);
+                     }
+                     dataForChart = result.data;
+                 }
             }
 
-            if (!content) {
+            if (!dataForChart || dataForChart.length === 0) {
                 setError(t('errors.fileEmpty'));
                 setIsLoading(false);
                 return;
             }
+            contentSample = JSON.stringify(dataForChart.slice(0, 10));
 
             setProcessedData(dataForChart);
-            const { report, suggestions: newSuggestions } = await analyzeDataForGraphSuggestions(content, modelConfig.dataToGraph);
-            setAnalysisReport(report);
-            setSuggestions(newSuggestions);
-            if(newSuggestions.length > 0) {
-                setSelectedSuggestion(newSuggestions[0]);
+            const aiResponse = await analyzeDataForGraphSuggestions(contentSample, file?.name || 'url_data', modelConfig.dataToGraph);
+            
+            const newRecs = aiResponse.chartRecommendations || []; // Safely handle missing/null recommendations
+            
+            setDataAnalysis(aiResponse.dataAnalysis);
+            setChartRecommendations(newRecs);
+
+            if(newRecs.length > 0) {
+                setSelectedRecommendation(newRecs[0]);
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : t('errors.unknown'));
@@ -242,27 +375,28 @@ const DataToGraphPanel: React.FC = () => {
 
             {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative" role="alert">{error}</div>}
 
-            {suggestions.length > 0 && (
+            {chartRecommendations.length > 0 && (
                 <div className="flex flex-col">
                     <h2 className="text-xl font-semibold text-gray-700 mb-4 text-center">{t('dataToGraph.step3')}</h2>
                     <div className="prose prose-sm max-w-none bg-white/50 p-4 rounded-lg mb-4 overflow-y-auto max-h-48 border">
-                        <pre className="whitespace-pre-wrap font-sans text-sm">{analysisReport}</pre>
+                        <pre className="whitespace-pre-wrap font-sans text-sm">{dataAnalysis}</pre>
                     </div>
 
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        {suggestions.map((s, i) => (
+                        {chartRecommendations.map((rec, i) => (
                             <button
                                 key={i}
-                                onClick={() => setSelectedSuggestion(s)}
-                                className={`p-4 rounded-xl transition-all duration-300 text-left ${selectedSuggestion?.title === s.title ? 'bg-indigo-500 text-white shadow-lg scale-105' : 'bg-white/60 hover:bg-white'}`}
+                                onClick={() => setSelectedRecommendation(rec)}
+                                className={`p-4 rounded-xl transition-all duration-300 text-left flex flex-col justify-between ${selectedRecommendation?.title === rec.title ? 'bg-indigo-500 text-white shadow-lg scale-105' : 'bg-white/60 hover:bg-white'}`}
                             >
-                                <h3 className="font-semibold text-center">{s.title}</h3>
+                                <h3 className="font-semibold text-center text-base mb-2">{rec.title}</h3>
+                                <p className="text-xs text-center opacity-80">{rec.reason}</p>
                             </button>
                         ))}
                     </div>
-                    {selectedSuggestion && (
-                         <div className="bg-white/60 rounded-xl p-4 min-h-[420px]">
-                           <G2Chart key={selectedSuggestion.title} spec={selectedSuggestion.spec} data={processedData} />
+                    {selectedRecommendation && (
+                         <div className="bg-white/60 rounded-xl p-4 min-h-[420px] flex items-center justify-center">
+                           <AntdChart key={selectedRecommendation.title} recommendation={selectedRecommendation} data={processedData} />
                          </div>
                     )}
                 </div>
